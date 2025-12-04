@@ -360,18 +360,6 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchOutlines = async () => {
-    if (!activeOrgId) return;
-    setIsLoading(true);
-    try {
-      const data = await apiClient.listOutlines(activeOrgId);
-      setOutlines(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Failed to fetch outlines:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleAddOutline = async (formData: any) => {
     if (!activeOrgId) return;
