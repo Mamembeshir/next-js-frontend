@@ -1,3 +1,5 @@
+ "use client";
+
 import axios, { type AxiosInstance } from "axios";
 import { authClient } from "@/lib/auth-client";
 
@@ -21,6 +23,8 @@ class ApiClient {
       return config;
     });
   }
+
+  // ------- AUTH & ORG ENDPOINTS (Better Auth - client only) -------
 
   async signUp(email: string, password: string, name: string) {
     const { data, error } = await authClient.signUp.email({
@@ -182,7 +186,8 @@ class ApiClient {
     return data;
   }
 
-  // === CUSTOM API ENDPOINTS (Outlines, etc.) - these use raw axios ===
+  // ------- APP-SPECIFIC ENDPOINTS (your own API routes) -------
+
   async createOutline(orgId: string, outline: any) {
     const { data } = await this.client.post(
       `api/org/${orgId}/outlines`,
