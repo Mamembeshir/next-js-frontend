@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { useOrganization } from "@/lib/org-context";
 import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -190,20 +191,20 @@ function SortableRow({
       <TableCell className="w-10 sm:w-12">
         <Checkbox className="translate-y-[2px]" />
       </TableCell>
-      <TableCell className="font-medium w-32 sm:w-auto">
+      <TableCell className="font-medium min-w-[150px] px-2 sm:px-4">
         <OutlineSheet
           outline={outline}
           onSubmit={(data) => onUpdate(outline.id, data)}
           isEdit
           trigger={
             <span className="cursor-pointer hover:underline truncate block">
-              {outline.header}
+              {outline.header || "-"}
             </span>
           }
         />
       </TableCell>
       {visibleColumns.sectionType && (
-        <TableCell className="hidden md:table-cell w-28 sm:w-auto">
+        <TableCell className="px-2 sm:px-4 min-w-[120px]">
           <Select
             value={outline.sectionType}
             onValueChange={async (value) => {
@@ -216,7 +217,7 @@ function SortableRow({
                   variant="secondary"
                   className="font-normal bg-muted/50 text-muted-foreground hover:bg-muted/50 text-xs w-full justify-start cursor-pointer"
                 >
-                  {outline.sectionType}
+                  {outline.sectionType || "-"}
                 </Badge>
               </SelectValue>
             </SelectTrigger>
@@ -239,23 +240,23 @@ function SortableRow({
         </TableCell>
       )}
       {visibleColumns.status && (
-        <TableCell className="hidden sm:table-cell w-28 sm:w-auto">
+        <TableCell className="px-2 sm:px-4 min-w-[100px]">
           {getStatusBadge(outline.status)}
         </TableCell>
       )}
       {visibleColumns.target && (
-        <TableCell className="text-right hidden lg:table-cell text-muted-foreground w-16 sm:w-20">
-          {outline.target}
+        <TableCell className="text-right px-2 sm:px-4 min-w-[80px] text-muted-foreground">
+          {outline.target || "-"}
         </TableCell>
       )}
       {visibleColumns.limit && (
-        <TableCell className="text-right hidden xl:table-cell text-muted-foreground w-16 sm:w-20">
-          {outline.limit}
+        <TableCell className="text-right px-2 sm:px-4 min-w-[80px] text-muted-foreground">
+          {outline.limit || "-"}
         </TableCell>
       )}
       {visibleColumns.reviewer && (
-        <TableCell className="hidden lg:table-cell text-muted-foreground w-24 sm:w-auto">
-          {outline.reviewer}
+        <TableCell className="px-2 sm:px-4 min-w-[120px] text-muted-foreground">
+          {outline.reviewer || "-"}
         </TableCell>
       )}
       <TableCell className="w-10 sm:w-12">
@@ -338,39 +339,49 @@ export default function DashboardPage() {
   };
 
   const checkOrganizationAndFetchOutlines = async () => {
-    if (activeOrgId) {
-      fetchOutlines();
-      return;
-    }
-
-    // If no active org, try to fetch list
     try {
+      // First check if we have an active session
+      const session = await authClient.getSession();
+      if (!session.data) {
+        // No active session, redirect to sign-in
+        router.push("/auth/signin");
+        return;
+      }
+
+      if (activeOrgId) {
+        await fetchOutlines();
+        return;
+      }
+
+      // If no active org but we have a session, try to fetch organizations
       const orgs = await apiClient.listOrganizations();
       if (orgs && orgs.length > 0) {
-        // Found organizations, set the first one as active
         setActiveOrgId(orgs[0].id);
       } else {
-        // No organizations found, show empty state
         setHasNoOrg(true);
-        setIsLoading(false);
       }
     } catch (error) {
-      console.error("Failed to check organizations:", error);
+      console.error("Error in checkOrganizationAndFetchOutlines:", error);
+      // @ts-ignore
+      if (error.message === "No active session - please sign in") {
+        router.push("/auth/signin");
+      }
+    } finally {
       setIsLoading(false);
     }
   };
- const fetchOutlines = async () => {
-   if (!activeOrgId) return;
-   setIsLoading(true);
-   try {
-     const data = await apiClient.listOutlines(activeOrgId);
-     setOutlines(Array.isArray(data) ? data : []);
-   } catch (error) {
-     console.error("Failed to fetch outlines:", error);
-   } finally {
-     setIsLoading(false);
-   }
- };
+  const fetchOutlines = async () => {
+    if (!activeOrgId) return;
+    setIsLoading(true);
+    try {
+      const data = await apiClient.listOutlines(activeOrgId);
+      setOutlines(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch outlines:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAddOutline = async (formData: any) => {
     if (!activeOrgId) return;
@@ -444,10 +455,12 @@ export default function DashboardPage() {
         <Tabs defaultValue="outline" className="w-full flex flex-col gap-4">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             {/* Mobile Tab Selector */}
-            <div className="lg:hidden w-full">
+            <div className="lg:hidden w-full flex items-center gap-3">
+              <div className="w-8 h-8 flex-shrink-0" />{" "}
+              {/* Spacer for the menu button */}
               <Select defaultValue="outline">
-                <SelectTrigger className="w-full justify-between">
-                  <SelectValue placeholder="Outline" />
+                <SelectTrigger className="w-[160px] justify-between text-sm">
+                  <SelectValue placeholder="Outline" className="text-sm" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="outline">Outline</SelectItem>
@@ -551,82 +564,87 @@ export default function DashboardPage() {
           </div>
 
           {/* ---- CONTENT ---- */}
-          <TabsContent value="outline">
+          <TabsContent value="outline" className="w-full">
             {/* TABLE WRAPPER */}
-            <div className="border rounded-lg w-full overflow-hidden">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={outlines.map((o) => o.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {/* Use shadcn Table with its built-in responsive container */}
-                  <Table>
-                    <TableHeader className="bg-muted sticky top-0 z-10">
-                      <TableRow>
-                        <TableHead className="w-10 sm:w-12"></TableHead>
-                        <TableHead className="w-10 sm:w-12"></TableHead>
-                        <TableHead className="w-32 sm:w-auto">Header</TableHead>
-                        {visibleColumns.sectionType && (
-                          <TableHead className="hidden md:table-cell w-28 sm:w-auto">
-                            Section Type
-                          </TableHead>
-                        )}
-                        {visibleColumns.status && (
-                          <TableHead className="hidden sm:table-cell w-28 sm:w-auto">
-                            Status
-                          </TableHead>
-                        )}
-                        {visibleColumns.target && (
-                          <TableHead className="text-right hidden lg:table-cell w-16 sm:w-20">
-                            Target
-                          </TableHead>
-                        )}
-                        {visibleColumns.limit && (
-                          <TableHead className="text-right hidden xl:table-cell w-16 sm:w-20">
-                            Limit
-                          </TableHead>
-                        )}
-                        {visibleColumns.reviewer && (
-                          <TableHead className="hidden lg:table-cell w-24 sm:w-auto">
-                            Reviewer
-                          </TableHead>
-                        )}
-                        <TableHead className="w-10 sm:w-12"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {outlines.length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={9}
-                            className="text-center py-8 text-muted-foreground"
-                          >
-                            No outlines yet. Create one to get started.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        outlines.map((outline) => (
-                          <SortableRow
-                            key={outline.id}
-                            outline={outline}
-                            onUpdate={handleUpdateOutline}
-                            onDelete={handleDeleteOutline}
-                            visibleColumns={visibleColumns}
-                          />
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </SortableContext>
-              </DndContext>
+            <div className="relative w-full border rounded-lg">
+              <div className="w-full overflow-x-auto">
+                <div className="min-w-[800px]">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={outlines.map((o) => o.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <Table className="min-w-full">
+                        <TableHeader className="bg-muted">
+                          <TableRow className="whitespace-nowrap">
+                            <TableHead className="w-12 px-2 sm:px-4"></TableHead>
+                            <TableHead className="w-12 px-2 sm:px-4"></TableHead>
+                            <TableHead className="min-w-[150px] px-2 sm:px-4">
+                              Header
+                            </TableHead>
+                            {visibleColumns.sectionType && (
+                              <TableHead className="min-w-[120px] px-2 sm:px-4">
+                                Section Type
+                              </TableHead>
+                            )}
+                            {visibleColumns.status && (
+                              <TableHead className="min-w-[100px] px-2 sm:px-4">
+                                Status
+                              </TableHead>
+                            )}
+                            {visibleColumns.target && (
+                              <TableHead className="min-w-[80px] text-right px-2 sm:px-4">
+                                Target
+                              </TableHead>
+                            )}
+                            {visibleColumns.limit && (
+                              <TableHead className="min-w-[80px] text-right px-2 sm:px-4">
+                                Limit
+                              </TableHead>
+                            )}
+                            {visibleColumns.reviewer && (
+                              <TableHead className="min-w-[120px] px-2 sm:px-4">
+                                Reviewer
+                              </TableHead>
+                            )}
+                            <TableHead className="w-12 px-2 sm:px-4"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {outlines.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={9}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                No outlines yet. Create one to get started.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            outlines.map((outline) => (
+                              <SortableRow
+                                key={outline.id}
+                                outline={outline}
+                                onUpdate={handleUpdateOutline}
+                                onDelete={handleDeleteOutline}
+                                visibleColumns={visibleColumns}
+                              />
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </SortableContext>
+                  </DndContext>
+                </div>
+              </div>
             </div>
 
             {/* Pagination Footer */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2 py-3">
+            <div className="sticky bottom-0 z-10 flex flex-col gap-4 p-3 bg-background border-t sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground text-sm">
                 0 of {outlines.length} row(s) selected.
               </div>
